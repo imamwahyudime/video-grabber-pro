@@ -12,9 +12,6 @@ dist/
 # Built artifacts mounted into backend
 backend/static/
 
-# Local screenshots / scratch
-.assets/
-
 # Vite scaffold leftovers
 frontend/src/assets/react.svg
 frontend/src/assets/vite.svg
