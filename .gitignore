@@ -1,0 +1,59 @@
+# Node / Vite
+node_modules/
+dist/
+.vite/
+.cache/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Built artifacts mounted into backend
+backend/static/
+
+# Local screenshots / scratch
+.assets/
+
+# Vite scaffold leftovers
+frontend/src/assets/react.svg
+frontend/src/assets/vite.svg
+frontend/src/assets/hero.png
+frontend/public/vite.svg
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Build artifacts
+*.log
+*.zip
+*.mp4
+*.mp3
+*.m4a
+*.webm
+*.mkv
+
+# Fly.io
+.fly/
+fly.toml.local
+
+# Devin scratch
+checklist.txt
