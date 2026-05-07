@@ -53,6 +53,8 @@ class VideoInfo(BaseModel):
     platform_name: str
     is_playlist: bool = False
     playlist_count: int | None = None
+    is_short: bool = False
+    is_live: bool = False
     formats: list[FormatInfo] = []
     subtitles: list[SubtitleTrack] = []
     automatic_captions: list[SubtitleTrack] = []

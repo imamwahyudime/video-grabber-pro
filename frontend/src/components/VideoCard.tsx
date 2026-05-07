@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Eye, Clock, Calendar, ExternalLink, Image as ImageIcon, Copy, Check, Layers } from "lucide-react";
+import { Eye, Clock, Calendar, ExternalLink, Image as ImageIcon, Copy, Check, Layers, Radio, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PlatformIcon } from "./PlatformIcon";
 import type { VideoInfo } from "../lib/types";
@@ -37,12 +37,19 @@ export function VideoCard({ info, t }: VideoCardProps) {
       className="card overflow-hidden"
     >
       <div className="flex flex-col md:flex-row">
-        <div className="relative md:w-[44%] md:max-w-md aspect-video bg-slate-100 dark:bg-slate-800">
+        <div
+          className={
+            "relative shrink-0 bg-slate-100 dark:bg-slate-800 " +
+            (info.is_short
+              ? "md:w-[180px] aspect-[9/16] mx-auto md:mx-0"
+              : "md:w-[44%] md:max-w-md aspect-video")
+          }
+        >
           {info.thumbnail ? (
             <img
               src={info.thumbnail}
               alt={info.title}
-              className="h-full w-full object-cover"
+              className={"h-full w-full " + (info.is_short ? "object-cover" : "object-cover")}
               loading="lazy"
               referrerPolicy="no-referrer"
             />
@@ -59,6 +66,16 @@ export function VideoCard({ info, t }: VideoCardProps) {
           {info.is_playlist && info.playlist_count && (
             <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/75 px-2 py-0.5 text-xs font-medium text-white">
               <Layers size={12} /> {info.playlist_count}
+            </span>
+          )}
+          {info.is_short && (
+            <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-red-600/90 px-2 py-0.5 text-xs font-semibold text-white shadow">
+              <Smartphone size={12} /> {t.shortsLabel}
+            </span>
+          )}
+          {info.is_live && (
+            <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-xs font-semibold text-white shadow">
+              <Radio size={12} /> {t.liveLabel}
             </span>
           )}
         </div>

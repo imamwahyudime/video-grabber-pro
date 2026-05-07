@@ -88,8 +88,7 @@ export function DownloadPanel({ info, selection, t, onHistoryUpdate }: DownloadP
         setStatus("idle");
         return;
       }
-      const apiErr = err as ApiError;
-      setError(apiErr.detail || apiErr.message || "Download failed");
+      setError(translateError(t, err as ApiError));
       setStatus("error");
     } finally {
       setController(null);
@@ -149,7 +148,7 @@ export function DownloadPanel({ info, selection, t, onHistoryUpdate }: DownloadP
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <div className="text-sm">
             <div className="font-medium">{t.errorTitle}</div>
-            <div className="mt-1 break-words font-mono text-xs opacity-80">{error}</div>
+            <div className="mt-1 break-words leading-relaxed opacity-90">{error}</div>
           </div>
         </div>
       )}
@@ -181,6 +180,33 @@ function ProgressBar({ progress, t }: { progress: DownloadProgress; t: Strings }
       </div>
     </div>
   );
+}
+
+function translateError(t: Strings, err: ApiError): string {
+  switch (err.message) {
+    case "rate_limited":
+      return t.errRateLimited;
+    case "video_unavailable":
+      return t.errVideoUnavailable;
+    case "private_video":
+      return t.errPrivateVideo;
+    case "geo_blocked":
+      return t.errGeoBlocked;
+    case "invalid_url":
+      return t.errInvalidUrl;
+    case "missing_url":
+      return t.errMissingUrl;
+    case "extraction_failed":
+      return t.errExtractionFailed + (err.detail ? ` (${err.detail})` : "");
+    case "download_failed":
+      return t.errDownloadFailed + (err.detail ? ` (${err.detail})` : "");
+    case "not_started":
+      return t.errNotStarted;
+    case "internal_error":
+      return t.errInternal;
+    default:
+      return err.detail || err.message || t.errGeneric;
+  }
 }
 
 function describeSelection(s: Selection): string {
