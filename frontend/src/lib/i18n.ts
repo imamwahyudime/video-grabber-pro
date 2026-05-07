@@ -66,6 +66,21 @@ export interface Strings {
   detected: string;
   noFormatPickedYet: string;
   loadingFormats: string;
+  /* shorts / live */
+  shortsLabel: string;
+  liveLabel: string;
+  /* friendly errors keyed by backend `error` code */
+  errRateLimited: string;
+  errVideoUnavailable: string;
+  errPrivateVideo: string;
+  errGeoBlocked: string;
+  errInvalidUrl: string;
+  errMissingUrl: string;
+  errExtractionFailed: string;
+  errDownloadFailed: string;
+  errInternal: string;
+  errNotStarted: string;
+  errGeneric: string;
 }
 
 const id: Strings = {
@@ -126,6 +141,20 @@ const id: Strings = {
   detected: "Terdeteksi",
   noFormatPickedYet: "Pilih format untuk mulai mengunduh",
   loadingFormats: "Memuat format yang tersedia…",
+  shortsLabel: "Shorts",
+  liveLabel: "Siaran langsung",
+  errRateLimited:
+    "YouTube meminta verifikasi bot dari server ini. Coba lagi beberapa menit, gunakan platform lain, atau set YT_COOKIES_FILE di server ke cookies.txt format Netscape dari browser yang sudah login.",
+  errVideoUnavailable: "Video ini tidak tersedia atau telah dihapus.",
+  errPrivateVideo: "Video ini bersifat privat atau hanya untuk anggota.",
+  errGeoBlocked: "Video ini dibatasi secara geografis dari wilayah server.",
+  errInvalidUrl: "URL tidak valid. Pastikan dimulai dengan http:// atau https://",
+  errMissingUrl: "URL wajib diisi.",
+  errExtractionFailed: "Gagal mengambil info video.",
+  errDownloadFailed: "Gagal mengunduh video.",
+  errInternal: "Kesalahan server. Coba lagi sebentar.",
+  errNotStarted: "Video belum dimulai.",
+  errGeneric: "Permintaan gagal. Coba lagi.",
 };
 
 const en: Strings = {
@@ -186,6 +215,20 @@ const en: Strings = {
   detected: "Detected",
   noFormatPickedYet: "Pick a format to begin downloading",
   loadingFormats: "Loading available formats…",
+  shortsLabel: "Shorts",
+  liveLabel: "Live",
+  errRateLimited:
+    "YouTube is asking us to verify we're not a bot from this server. Try again in a few minutes, try a different platform, or set YT_COOKIES_FILE on the server to a Netscape-format cookies.txt exported from a logged-in browser.",
+  errVideoUnavailable: "This video is unavailable or has been removed.",
+  errPrivateVideo: "This video is private or members-only.",
+  errGeoBlocked: "This video is geo-restricted from the server's region.",
+  errInvalidUrl: "Invalid URL. Make sure it starts with http:// or https://",
+  errMissingUrl: "URL is required.",
+  errExtractionFailed: "Failed to fetch video info.",
+  errDownloadFailed: "Download failed.",
+  errInternal: "Server error. Try again in a moment.",
+  errNotStarted: "This video hasn't started yet.",
+  errGeneric: "Request failed. Try again.",
 };
 
 export const STRINGS: Record<Lang, Strings> = { id, en };

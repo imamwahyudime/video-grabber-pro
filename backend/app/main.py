@@ -25,8 +25,37 @@ from .downloader import (
     iter_file_chunks,
     safe_filename,
 )
-from .platforms import detect_platform, supported_platforms
+from .platforms import detect_platform, is_youtube_short, supported_platforms
 from .schemas import DownloadRequest, ErrorResponse, InfoRequest, VideoInfo
+
+_YT_BOT_CHALLENGE_PHRASES = (
+    "sign in to confirm",
+    "confirm you’re not a bot",
+    "confirm you're not a bot",
+)
+
+
+def _classify_yt_dlp_error(msg: str) -> tuple[str, str]:
+    """Return (error_code, friendly_detail) for yt-dlp DownloadError messages."""
+    low = msg.lower()
+    if any(p in low for p in _YT_BOT_CHALLENGE_PHRASES):
+        return (
+            "rate_limited",
+            "YouTube is asking us to verify we're not a bot from this server. "
+            "Try again in a few minutes, try a different platform, or set "
+            "YT_COOKIES_FILE on the server to a Netscape-format cookies.txt "
+            "exported from a logged-in browser.",
+        )
+    if "private video" in low or "members-only" in low:
+        return ("private_video", "This video is private or members-only.")
+    if "video unavailable" in low:
+        return ("video_unavailable", "This video is unavailable or has been removed.")
+    if "geo restricted" in low or "not available in your country" in low:
+        return ("geo_blocked", "This video is geo-restricted from this server's region.")
+    if "live event will begin" in low or "premiere" in low:
+        return ("not_started", "This video hasn't started yet.")
+    return ("extraction_failed", msg)
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("video_grabber_pro")
@@ -95,8 +124,10 @@ async def info(payload: InfoRequest) -> VideoInfo | JSONResponse:
     try:
         return fetch_info(url)
     except yt_dlp.utils.DownloadError as e:  # type: ignore[attr-defined]
-        logger.warning("info extraction failed: %s", e)
-        return _err(400, "extraction_failed", str(e))
+        code, detail = _classify_yt_dlp_error(str(e))
+        logger.warning("info extraction failed (%s): %s", code, e)
+        status = 429 if code == "rate_limited" else 400
+        return _err(status, code, detail)
     except Exception as e:
         logger.exception("info unexpected error")
         return _err(500, "internal_error", str(e))
@@ -117,8 +148,12 @@ async def download(payload: DownloadRequest, background: BackgroundTasks):
             subtitle_lang=payload.subtitle_lang,
         )
     except yt_dlp.utils.DownloadError as e:  # type: ignore[attr-defined]
-        logger.warning("download failed: %s", e)
-        return _err(400, "download_failed", str(e))
+        code, detail = _classify_yt_dlp_error(str(e))
+        if code == "extraction_failed":
+            code = "download_failed"
+        logger.warning("download failed (%s): %s", code, e)
+        status = 429 if code == "rate_limited" else 400
+        return _err(status, code, detail)
     except ValueError as e:
         return _err(400, "invalid_format", str(e))
     except Exception as e:
@@ -174,9 +209,11 @@ async def thumbnail(url: str = Query(..., description="Image URL to proxy")):
 
 
 @app.get("/api/detect")
-async def detect(url: str = Query(...)) -> dict[str, str]:
+async def detect(url: str = Query(...)) -> dict[str, str | bool]:
     p = detect_platform(url)
-    return {"id": p.id, "name": p.name, "icon": p.icon}
+    is_short = p.id == "youtube" and is_youtube_short(url)
+    name = "YouTube Shorts" if is_short else p.name
+    return {"id": p.id, "name": name, "icon": p.icon, "is_short": is_short}
 
 
 # Pydantic-validation error → 400 JSON instead of FastAPI default

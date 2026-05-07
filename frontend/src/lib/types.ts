@@ -42,6 +42,8 @@ export interface VideoInfo {
   platform_name: string;
   is_playlist: boolean;
   playlist_count: number | null;
+  is_short?: boolean;
+  is_live?: boolean;
   formats: FormatInfo[];
   subtitles: SubtitleTrack[];
   automatic_captions: SubtitleTrack[];

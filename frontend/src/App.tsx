@@ -37,13 +37,47 @@ const PLATFORM_DOMAINS: { id: string; name: string; suffixes: string[] }[] = [
 
 function detectPlatform(url: string): { id: string; name: string } | null {
   try {
-    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
     for (const p of PLATFORM_DOMAINS) {
-      if (p.suffixes.some((s) => host === s || host.endsWith("." + s))) return p;
+      if (p.suffixes.some((s) => host === s || host.endsWith("." + s))) {
+        // Annotate YouTube Shorts so the detection chip is more specific.
+        if (p.id === "youtube" && /\/shorts\//i.test(u.pathname)) {
+          return { id: "youtube", name: "YouTube Shorts" };
+        }
+        return p;
+      }
     }
     return { id: "generic", name: "Other" };
   } catch {
     return null;
+  }
+}
+
+function friendlyError(t: Strings, err: ApiError): string {
+  switch (err.message) {
+    case "rate_limited":
+      return t.errRateLimited;
+    case "video_unavailable":
+      return t.errVideoUnavailable;
+    case "private_video":
+      return t.errPrivateVideo;
+    case "geo_blocked":
+      return t.errGeoBlocked;
+    case "invalid_url":
+      return t.errInvalidUrl;
+    case "missing_url":
+      return t.errMissingUrl;
+    case "extraction_failed":
+      return t.errExtractionFailed + (err.detail ? ` (${err.detail})` : "");
+    case "download_failed":
+      return t.errDownloadFailed + (err.detail ? ` (${err.detail})` : "");
+    case "not_started":
+      return t.errNotStarted;
+    case "internal_error":
+      return t.errInternal;
+    default:
+      return err.detail || err.message || t.errGeneric;
   }
 }
 
@@ -103,8 +137,7 @@ export default function App() {
       });
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
-      const apiErr = err as ApiError;
-      setError(apiErr.detail || apiErr.message || "Failed to fetch info");
+      setError(friendlyError(t, err as ApiError));
     } finally {
       setLoading(false);
     }

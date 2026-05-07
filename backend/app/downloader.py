@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 import tempfile
@@ -13,11 +14,40 @@ from pathlib import Path
 from typing import Any
 
 import yt_dlp
+from yt_dlp.utils import DownloadError
 
-from .platforms import detect_platform
+from .platforms import detect_platform, is_youtube_short
 from .schemas import FormatInfo, SubtitleTrack, VideoInfo
 
 logger = logging.getLogger(__name__)
+
+# YouTube increasingly fingerprints the default `web` player and challenges
+# requests with "Sign in to confirm you're not a bot". yt-dlp lets us swap to
+# alternative player clients which use different (and sometimes less-policed)
+# endpoints. The first attempt uses yt-dlp's defaults; only on bot challenge
+# do we explicitly rotate through the clients below.
+YT_FALLBACK_CLIENTS: tuple[tuple[str, ...], ...] = (
+    ("tv", "web"),
+    ("mweb",),
+    ("web_safari", "web"),
+    ("web_embedded",),
+    ("tv_embedded",),
+    ("android_vr",),
+)
+
+_BOT_CHALLENGE_RE = re.compile(
+    r"(sign in to confirm|confirm you.?re not a bot)",
+    re.IGNORECASE,
+)
+
+
+def _cookies_path() -> str | None:
+    """Path to a cookies file if one is configured via env."""
+    p = os.environ.get("YT_COOKIES_FILE") or os.environ.get("YTDLP_COOKIES_FILE")
+    if p and Path(p).is_file():
+        return p
+    return None
+
 
 # Quality presets translate to yt-dlp format selectors. yt-dlp will pick the
 # best matching pre-merged format if available, or merge separate streams via
@@ -51,7 +81,7 @@ def safe_filename(name: str, max_len: int = 80) -> str:
 
 
 def _base_opts() -> dict[str, Any]:
-    return {
+    opts: dict[str, Any] = {
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
@@ -62,6 +92,68 @@ def _base_opts() -> dict[str, Any]:
         "retries": 3,
         "fragment_retries": 3,
     }
+    cookies = _cookies_path()
+    if cookies:
+        opts["cookiefile"] = cookies
+    return opts
+
+
+def _is_bot_challenge(exc: BaseException) -> bool:
+    return bool(_BOT_CHALLENGE_RE.search(str(exc)))
+
+
+def _is_youtube(url: str) -> bool:
+    return "youtube.com" in url or "youtu.be" in url
+
+
+def _ydl_extract_with_fallback(opts: dict[str, Any], url: str, *, download: bool) -> dict[str, Any]:
+    """Run extract_info, transparently rotating YouTube player clients on bot challenge."""
+    # First attempt uses whatever yt-dlp picks by default — that already rotates
+    # through several clients internally and works for the vast majority of videos.
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=download)
+        if info is None:
+            raise RuntimeError("No info returned for URL")
+        return info
+    except DownloadError as exc:
+        if not (_is_youtube(url) and _is_bot_challenge(exc)):
+            raise
+        logger.info("yt: default clients hit bot challenge, rotating")
+
+    last_exc: BaseException | None = None
+    for client in YT_FALLBACK_CLIENTS:
+        attempt_opts = dict(opts)
+        existing = dict(attempt_opts.get("extractor_args") or {})
+        yt_args = dict(existing.get("youtube") or {})
+        yt_args["player_client"] = list(client)
+        existing["youtube"] = yt_args
+        attempt_opts["extractor_args"] = existing
+        try:
+            with yt_dlp.YoutubeDL(attempt_opts) as ydl:
+                info = ydl.extract_info(url, download=download)
+            if info is None:
+                raise RuntimeError("No info returned for URL")
+            logger.info("yt: succeeded with player_client=%s", client)
+            return info
+        except DownloadError as exc:
+            last_exc = exc
+            if _is_bot_challenge(exc):
+                logger.info("yt: client=%s hit bot challenge, trying next", client)
+                continue
+            # Non-bot error from a fallback client: keep trying others — we
+            # only got here because the default already failed with a bot wall.
+            logger.info(
+                "yt: client=%s failed with non-bot error: %s",
+                client,
+                str(exc).splitlines()[0][:120],
+            )
+            continue
+        except Exception as exc:
+            last_exc = exc
+            continue
+    assert last_exc is not None
+    raise last_exc
 
 
 def _format_to_schema(f: dict[str, Any]) -> FormatInfo:
@@ -124,10 +216,7 @@ def fetch_info(url: str) -> VideoInfo:
     Raises yt_dlp.utils.DownloadError on extraction failures.
     """
     opts = _base_opts()
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-    if info is None:
-        raise RuntimeError("No info returned for URL")
+    info = _ydl_extract_with_fallback(opts, url, download=False)
 
     is_playlist = info.get("_type") == "playlist" or "entries" in info
     if is_playlist and info.get("entries"):
@@ -141,7 +230,11 @@ def fetch_info(url: str) -> VideoInfo:
         info_for_meta = info
         playlist_count = None
 
-    platform = detect_platform(info.get("webpage_url") or url)
+    webpage = str(info.get("webpage_url") or url)
+    platform = detect_platform(webpage)
+    is_short = is_youtube_short(webpage) or is_youtube_short(url)
+    platform_name = "YouTube Shorts" if (platform.id == "youtube" and is_short) else platform.name
+    is_live = bool(info_for_meta.get("is_live") or info_for_meta.get("was_live"))
 
     formats_raw = info_for_meta.get("formats") or []
     # Filter out fragmented manifests / DASH-only entries that aren't useful to users.
@@ -170,9 +263,11 @@ def fetch_info(url: str) -> VideoInfo:
         webpage_url=str(info_for_meta.get("webpage_url") or url),
         extractor=str(info_for_meta.get("extractor") or "generic"),
         platform_id=platform.id,
-        platform_name=platform.name,
+        platform_name=platform_name,
         is_playlist=bool(is_playlist),
         playlist_count=playlist_count,
+        is_short=is_short,
+        is_live=is_live,
         formats=cleaned_formats,
         subtitles=_subs_to_schema(info_for_meta.get("subtitles")),
         automatic_captions=_subs_to_schema(info_for_meta.get("automatic_captions")),
@@ -275,6 +370,9 @@ def download_to_file(
         "restrictfilenames": False,
         "windowsfilenames": True,
     }
+    cookies = _cookies_path()
+    if cookies:
+        opts["cookiefile"] = cookies
 
     postprocessors: list[dict[str, Any]] = []
     if audio_only:
@@ -302,8 +400,7 @@ def download_to_file(
         opts["postprocessors"] = postprocessors
 
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+        info = _ydl_extract_with_fallback(opts, url, download=True)
     except Exception:
         shutil.rmtree(workdir, ignore_errors=True)
         raise
